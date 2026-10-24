@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>GameSpeed</AssemblyName>
+    <RootNamespace>GameSpeed</RootNamespace>
+    <!-- Injector and target must agree on bitness, so there is no AnyCPU
+         build: publish picks win-x64 or win-x86 explicitly. -->
+    <Platforms>x64;x86</Platforms>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Globalization-invariant mode must stay off. WinForms handles
+         WM_INPUTLANGCHANGE by building a CultureInfo from the new layout's
+         LCID, and in invariant mode CultureInfo.GetCultureInfo(1033) throws:
+         switching keyboard layout with the filter box focused killed the
+         window with CultureNotFoundException. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+</Project>

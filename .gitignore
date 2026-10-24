@@ -1,0 +1,12 @@
+bin/
+obj/
+dist/
+src/injector/bin/
+src/injector/obj/
+*.old.dll
+*.pdb
+*.lib
+*.exp
+*.obj
+.vs/
+*.user
