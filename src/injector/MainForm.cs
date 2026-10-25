@@ -140,6 +140,15 @@ public sealed class MainForm : Form
         _target.Text = $"Hearthstone  ·  PID {pid}";
         if (pid == _failedPid) return;
 
+        // Injecting into a game that is still starting is what crashed it;
+        // the module waits for the engine itself, this just keeps the
+        // injection out of the first seconds of the launch altogether.
+        if (!LooksStarted(game))
+        {
+            _state.Text = "Игра запускается, жду…";
+            return;
+        }
+
         // The module waits for the runtime itself, but attaching only once
         // Mono is in keeps it from timing out on a slow start.
         switch (Injector.DetectUnity(pid))
@@ -179,7 +188,7 @@ public sealed class MainForm : Form
             {
                 Injector.Inject(pid, Injector.DllPath(Method.Unity));
                 Publish();
-                _state.Text = "Модуль внедрён, жду отклик…";
+                _state.Text = "Жду, пока игра загрузится…";
             }
         }
         catch (Exception ex)
@@ -189,6 +198,16 @@ public sealed class MainForm : Form
             _failedPid = pid;
             _state.Text = "Не удалось подключиться: " + ex.Message.Split('\n')[0];
         }
+    }
+
+    private static bool LooksStarted(Process game)
+    {
+        try
+        {
+            return DateTime.Now - game.StartTime >= TimeSpan.FromSeconds(10)
+                && game.MainWindowHandle != IntPtr.Zero;
+        }
+        catch { return true; }   // unreadable: let the module's own wait decide
     }
 
     private static bool IsAlive(int pid)
@@ -239,7 +258,7 @@ public sealed class MainForm : Form
         }
         if (!_ctl.Attached)
         {
-            _state.Text = "Модуль внедрён, жду отклик…";
+            _state.Text = "Жду, пока игра загрузится…";
             return;
         }
 

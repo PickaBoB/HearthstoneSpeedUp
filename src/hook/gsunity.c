@@ -558,6 +558,73 @@ static BOOL call_get_float(void *method, float *out)
 }
 
 /* ------------------------------------------------------------------ */
+/* Waiting for the engine                                              */
+/* ------------------------------------------------------------------ */
+
+/* Mono is loaded within the first second of a launch, long before the
+ * engine is up. Attaching a thread to a half-built domain, or invoking a
+ * Time icall before Unity has created its TimeManager, crashes the game in
+ * UnityPlayer.dll -- which is what happened whenever the controller was
+ * already running when the game started. Nothing here touches the runtime
+ * beyond mono_get_root_domain, a plain global read. */
+
+static BOOL CALLBACK find_unity_window(HWND hwnd, LPARAM lp)
+{
+    DWORD pid = 0;
+    WCHAR cls[64];
+
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != GetCurrentProcessId() || !IsWindowVisible(hwnd)) return TRUE;
+    if (!GetClassNameW(hwnd, cls, 64) || lstrcmpW(cls, L"UnityWndClass") != 0) return TRUE;
+    *(HWND*)lp = hwnd;
+    return FALSE;
+}
+
+static ULONGLONG process_age_ms(void)
+{
+    FILETIME created, exited, kernel, user, now;
+    ULARGE_INTEGER a, b;
+
+    if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user))
+        return 0;
+    GetSystemTimeAsFileTime(&now);
+    a.LowPart = created.dwLowDateTime; a.HighPart = created.dwHighDateTime;
+    b.LowPart = now.dwLowDateTime;     b.HighPart = now.dwHighDateTime;
+    return b.QuadPart > a.QuadPart ? (b.QuadPart - a.QuadPart) / 10000 : 0;
+}
+
+static void wait_for_engine(void)
+{
+    int steady = 0, ticks = 0;
+    BOOL logged = FALSE;
+
+    for (;; ticks++) {
+        HWND wnd = NULL;
+        DWORD_PTR res;
+        BOOL ok = process_age_ms() >= 20000;
+
+        if (ok) {
+            EnumWindows(find_unity_window, (LPARAM)&wnd);
+            /* The main thread pumps messages once per frame; during loading
+             * it blocks and this times out. */
+            ok = wnd != NULL
+              && SendMessageTimeoutW(wnd, WM_NULL, 0, 0,
+                                     SMTO_ABORTIFHUNG | SMTO_BLOCK, 1000, &res)
+              && rt.root_domain() != NULL;
+        }
+
+        if (ok) {
+            if (++steady >= 6) break;       /* 3 s in a row */
+        } else {
+            steady = 0;
+            if (!logged) { gsp_log("waiting for the game to finish loading"); logged = TRUE; }
+        }
+        Sleep(500);
+    }
+    if (logged) gsp_log("game loaded after %d s of waiting", ticks / 2);
+}
+
+/* ------------------------------------------------------------------ */
 /* Worker                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -600,6 +667,8 @@ static DWORD WINAPI worker(LPVOID unused)
         }
         return 0;
     }
+
+    wait_for_engine();
 
     rt.domain = rt.root_domain();
     if (!rt.domain) { gsp_log("root domain is NULL"); return 0; }
